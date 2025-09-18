@@ -48,21 +48,40 @@ if(NOT CFITSIO_INCLUDE_DIR OR NOT CFITSIO_LIBRARY)
     message(FATAL_ERROR "CFITSIO not found. Set CFITSIO_DIR environment variable or install CFITSIO.")
 endif()
 
-# HEALPIX
-find_path(HEALPIX_INCLUDE_DIR chealpix.h
-    HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1
-    PATH_SUFFIXES include
+# HEALPIX - Try to find Fortran modules first, fallback to C interface
+find_path(HEALPIX_FORTRAN_DIR healpix_types.mod
+    HINTS ENV HEALPIX_DIR
+    PATH_SUFFIXES include lib/fortran/mod
 )
-find_library(HEALPIX_LIBRARY chealpix
-    HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1
-    PATH_SUFFIXES lib
-)
+
+if(HEALPIX_FORTRAN_DIR)
+    # Found Fortran modules - use them
+    set(HEALPIX_INCLUDE_DIR ${HEALPIX_FORTRAN_DIR})
+    find_library(HEALPIX_LIBRARY healpix
+        HINTS ENV HEALPIX_DIR
+        PATH_SUFFIXES lib
+    )
+    message(STATUS "Found HEALPIX Fortran modules at: ${HEALPIX_FORTRAN_DIR}")
+else()
+    # Fallback to C interface (Homebrew)
+    find_path(HEALPIX_INCLUDE_DIR chealpix.h
+        HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1
+        PATH_SUFFIXES include
+    )
+    find_library(HEALPIX_LIBRARY chealpix
+        HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1
+        PATH_SUFFIXES lib
+    )
+    message(WARNING "Found only HEALPIX C interface. T-RECS requires Fortran modules. See CLAUDE.md for installation instructions.")
+endif()
+
 find_library(GIF_LIBRARY gif
     HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1
     PATH_SUFFIXES lib
 )
+
 if(NOT HEALPIX_INCLUDE_DIR OR NOT HEALPIX_LIBRARY)
-    message(FATAL_ERROR "HEALPIX not found. Set HEALPIX_DIR environment variable or install HEALPIX.")
+    message(FATAL_ERROR "HEALPIX not found. Set HEALPIX_DIR environment variable or install HEALPIX with Fortran support. See CLAUDE.md for instructions.")
 endif()
 
 # LAPACK
@@ -75,7 +94,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # Create interface libraries for external dependencies
 
 add_library(GSL_interface INTERFACE)
-target_link_libraries(GSL_interface INTERFACE ${GSL_LIBRARIES})
+target_link_libraries(GSL_interface INTERFACE ${GSL_LDFLAGS})
 target_include_directories(GSL_interface INTERFACE ${GSL_INCLUDE_DIRS})
 target_compile_options(GSL_interface INTERFACE ${GSL_CFLAGS_OTHER})
 
@@ -88,7 +107,18 @@ target_link_libraries(HEALPIX_interface INTERFACE ${HEALPIX_LIBRARY})
 if(GIF_LIBRARY)
     target_link_libraries(HEALPIX_interface INTERFACE ${GIF_LIBRARY})
 endif()
+# Also link the C HEALPIX library for C functions like ang2pix_ring_
+find_library(HEALPIX_C_LIBRARY chealpix HINTS ENV HEALPIX_DIR /opt/homebrew/Cellar/healpix/3.83_1 PATH_SUFFIXES lib)
+if(HEALPIX_C_LIBRARY)
+    target_link_libraries(HEALPIX_interface INTERFACE ${HEALPIX_C_LIBRARY})
+endif()
 target_include_directories(HEALPIX_interface INTERFACE ${HEALPIX_INCLUDE_DIR})
+
+# Add HEALPIX compiled object files if Fortran modules are available
+if(HEALPIX_FORTRAN_DIR)
+    file(GLOB HEALPIX_OBJECTS "${CMAKE_SOURCE_DIR}/external/Healpix_3.83/fortran_build/*.o")
+    target_link_libraries(HEALPIX_interface INTERFACE ${HEALPIX_OBJECTS})
+endif()
 
 add_library(LAPACK_interface INTERFACE)
 target_link_libraries(LAPACK_interface INTERFACE ${LAPACK_LIBRARIES})
