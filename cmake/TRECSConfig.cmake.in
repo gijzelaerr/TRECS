@@ -1,0 +1,38 @@
+@PACKAGE_INIT@
+
+# T-RECS CMake configuration file
+
+set(TRECS_VERSION @PROJECT_VERSION@)
+
+# Find dependencies
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSL REQUIRED gsl)
+
+find_path(CFITSIO_INCLUDE_DIR fitsio.h
+    HINTS ENV CFITSIO_DIR
+    PATH_SUFFIXES include
+)
+find_library(CFITSIO_LIBRARY cfitsio
+    HINTS ENV CFITSIO_DIR
+    PATH_SUFFIXES lib
+)
+
+find_path(HEALPIX_INCLUDE_DIR healpix_types.mod
+    HINTS ENV HEALPIX_DIR
+    PATH_SUFFIXES include
+)
+find_library(HEALPIX_LIBRARY healpix
+    HINTS ENV HEALPIX_DIR
+    PATH_SUFFIXES lib
+)
+
+find_package(LAPACK REQUIRED)
+find_package(OpenMP REQUIRED)
+
+# Set TRECS paths
+set(TRECS_BIN_DIR ${PACKAGE_PREFIX_DIR}/bin)
+set(TRECS_SHARE_DIR ${PACKAGE_PREFIX_DIR}/share/trecs)
+set(TRECS_EXAMPLES_DIR ${TRECS_SHARE_DIR}/examples)
+set(TRECS_DOC_DIR ${TRECS_SHARE_DIR}/doc)
+
+check_required_components(TRECS)
